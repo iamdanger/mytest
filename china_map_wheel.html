@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中国地图省份抽奖 - 真实边界</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 15px;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+        h1 {
+            color: #e94560;
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+            font-size: 1.8em;
+        }
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            color: #fff;
+        }
+        .loading.hidden {
+            display: none;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(233, 69, 96, 0.3);
+            border-top-color: #e94560;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .loading p {
+            margin-top: 15px;
+            color: #aaa;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 25px;
+            max-width: 1800px;
+            width: 100%;
+        }
+        .map-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .map-container {
+            position: relative;
+            background: rgba(255,255,255,0.02);
+            border-radius: 15px;
+            padding: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            margin: 0 auto;
+        }
+        #map-canvas {
+            display: block;
+            cursor: pointer;
+        }
+        .province-tooltip {
+            position: absolute;
+            background: rgba(0,0,0,0.85);
+            color: #fff;
+            padding: 8px 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 100;
+            border: 1px solid #e94560;
+        }
+        .side-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            min-width: 260px;
+            max-width: 300px;
+        }
+        .controls {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 15px;
+            text-align: center;
+        }
+        #spin-btn {
+            width: 100%;
+            padding: 15px 35px;
+            font-size: 18px;
+            background: linear-gradient(135deg, #e94560 0%, #c73e54 100%);
+            color: #fff;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 5px 25px rgba(233, 69, 96, 0.4);
+            transition: all 0.3s;
+            margin-bottom: 12px;
+        }
+        #spin-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 35px rgba(233, 69, 96, 0.6);
+        }
+        #spin-btn:disabled {
+            background: #555;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        .result {
+            background: linear-gradient(135deg, rgba(233, 69, 96, 0.15) 0%, rgba(233, 69, 96, 0.05) 100%);
+            border: 2px solid rgba(233, 69, 96, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+        }
+        .result h2 {
+            color: #aaa;
+            font-size: 12px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .result .province-name {
+            color: #e94560;
+            font-size: 2.4em;
+            font-weight: bold;
+            text-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+            min-height: 55px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .stats {
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            padding: 12px;
+        }
+        .stats h3 {
+            color: #888;
+            font-size: 11px;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+        }
+        .stat-item {
+            background: rgba(255,255,255,0.03);
+            border-radius: 6px;
+            padding: 6px;
+            text-align: center;
+        }
+        .stat-item .count {
+            color: #e94560;
+            font-size: 1.3em;
+            font-weight: bold;
+        }
+        .stat-item .label {
+            color: #666;
+            font-size: 10px;
+        }
+        .history {
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            padding: 12px;
+        }
+        .history h3 {
+            color: #888;
+            font-size: 11px;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        .history-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            justify-content: center;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        .history-item {
+            background: rgba(233, 69, 96, 0.2);
+            color: #fff;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+        }
+        .history-item:first-child {
+            background: rgba(233, 69, 96, 0.5);
+            font-weight: bold;
+        }
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 10px;
+            padding: 8px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 8px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #888;
+            font-size: 10px;
+        }
+        .legend-color {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+        }
+        .toast {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            background: linear-gradient(135deg, #e94560 0%, #c73e54 100%);
+            color: #fff;
+            padding: 20px 35px;
+            border-radius: 15px;
+            font-size: 22px;
+            font-weight: bold;
+            z-index: 1001;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 40px rgba(233, 69, 96, 0.5);
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+        @media (max-width: 1100px) {
+            .container {
+                flex-direction: column;
+                align-items: center;
+            }
+            .side-panel {
+                width: 100%;
+                max-width: 500px;
+            }
+            #map-canvas {
+                max-width: 100%;
+                height: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>正在加载地图数据...</p>
+    </div>
+
+    <h1>🗺️ 中国省份随机抽奖</h1>
+
+    <div class="container">
+        <div class="map-section">
+            <div class="map-container">
+                <canvas id="map-canvas" width="1000" height="800"></canvas>
+                <div class="province-tooltip" id="tooltip"></div>
+            </div>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #2a5298;"></div>
+                    <span>未选中</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #feca57;"></div>
+                    <span>抽奖中</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #e94560;"></div>
+                    <span>已选中</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="side-panel">
+            <div class="controls">
+                <button id="spin-btn">🎲 开始抽奖</button>
+            </div>
+
+            <div class="result">
+                <h2>🎯 选中省份</h2>
+                <div class="province-name" id="result">点击开始</div>
+            </div>
+
+            <div class="stats">
+                <h3>📊 统计信息</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="count" id="total-count">0</div>
+                        <div class="label">抽取次数</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="count" id="unique-count">0</div>
+                        <div class="label">不同省份</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="count" id="remain-count">34</div>
+                        <div class="label">剩余省份</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="count" id="most-count">-</div>
+                        <div class="label">最多次数</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="history">
+                <h3>📜 历史记录</h3>
+                <div class="history-list" id="history"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const canvas = document.getElementById('map-canvas');
+        const ctx = canvas.getContext('2d');
+        const tooltip = document.getElementById('tooltip');
+        const btn = document.getElementById('spin-btn');
+        const resultEl = document.getElementById('result');
+        const historyEl = document.getElementById('history');
+        const toastEl = document.getElementById('toast');
+        const loadingEl = document.getElementById('loading');
+
+        // 颜色配置
+        const COLORS = {
+            normal: '#2a5298',
+            stroke: '#4a7cc9',
+            hover: '#3d6db3',
+            highlight: '#feca57',
+            selected: '#e94560',
+            text: '#fff'
+        };
+
+        // 缩放和平移参数
+        const SCALE = 15;
+        const OFFSET_X = 20;
+        const OFFSET_Y = 60;
+
+        let geoData = null;
+        let provinces = [];
+        let hoveredProvince = null;
+        let highlightedProvince = null;
+        let selectedProvince = null;
+        let isSpinning = false;
+        let history = [];
+        let countMap = {};
+        let uniqueProvinces = new Set();
+
+        // 省份名称映射
+        const provinceNameMap = {
+            '北京市': '北京',
+            '天津市': '天津',
+            '河北省': '河北',
+            '山西省': '山西',
+            '内蒙古自治区': '内蒙古',
+            '辽宁省': '辽宁',
+            '吉林省': '吉林',
+            '黑龙江省': '黑龙江',
+            '上海市': '上海',
+            '江苏省': '江苏',
+            '浙江省': '浙江',
+            '安徽省': '安徽',
+            '福建省': '福建',
+            '江西省': '江西',
+            '山东省': '山东',
+            '河南省': '河南',
+            '湖北省': '湖北',
+            '湖南省': '湖南',
+            '广东省': '广东',
+            '广西壮族自治区': '广西',
+            '海南省': '海南',
+            '重庆市': '重庆',
+            '四川省': '四川',
+            '贵州省': '贵州',
+            '云南省': '云南',
+            '西藏自治区': '西藏',
+            '陕西省': '陕西',
+            '甘肃省': '甘肃',
+            '青海省': '青海',
+            '宁夏回族自治区': '宁夏',
+            '新疆维吾尔自治区': '新疆',
+            '台湾省': '台湾',
+            '香港特别行政区': '香港',
+            '澳门特别行政区': '澳门'
+        };
+
+        // 省份中心点手动调整（用于文字显示）
+        const centerAdjustments = {
+            '新疆': { x: -40, y: 90 },
+            '西藏': { x: 30, y: 60 },
+            '内蒙古': { x: 60, y: 15 },
+            '青海': { x: 15, y: 25 },
+            '四川': { x: 20, y: 15 },
+            '黑龙江': { x: 25, y: 35 },
+            '吉林': { x: 5, y: 15 },
+            '辽宁': { x: -10, y: 15 },
+            '甘肃': { x: 25, y: -25 },
+            '河北': { x: 8, y: 18 },
+            '北京': { x: 0, y: 0 },
+            '天津': { x: 0, y: 0 },
+            '山西': { x: 0, y: 8 },
+            '陕西': { x: -5, y: 0 },
+            '宁夏': { x: 0, y: 0 },
+            '河南': { x: 0, y: 8 },
+            '山东': { x: 12, y: 8 },
+            '江苏': { x: 8, y: 8 },
+            '安徽': { x: 0, y: 0 },
+            '湖北': { x: 0, y: 0 },
+            '湖南': { x: 0, y: 12 },
+            '江西': { x: 0, y: 0 },
+            '浙江': { x: 0, y: 0 },
+            '福建': { x: 0, y: 8 },
+            '广东': { x: -12, y: 8 },
+            '广西': { x: 0, y: 0 },
+            '海南': { x: 0, y: 0 },
+            '贵州': { x: 0, y: 0 },
+            '云南': { x: -15, y: 15 },
+            '重庆': { x: 8, y: 0 },
+            '上海': { x: 0, y: 0 },
+            '台湾': { x: 0, y: 0 },
+            '香港': { x: 0, y: 0 },
+            '澳门': { x: 0, y: 0 }
+        };
+
+        // 加载GeoJSON数据
+        async function loadGeoData() {
+            try {
+                const response = await fetch('https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json');
+                const data = await response.json();
+                geoData = data;
+                processGeoData();
+                drawMap();
+                loadingEl.classList.add('hidden');
+            } catch (error) {
+                console.error('加载地图数据失败:', error);
+                document.querySelector('.loading p').textContent = '地图数据加载失败，请刷新重试';
+            }
+        }
+
+        // 处理GeoJSON数据
+        function processGeoData() {
+            provinces = [];
+            const features = geoData.features;
+
+            features.forEach((feature, index) => {
+                const name = feature.properties.name;
+                const shortName = provinceNameMap[name] || name;
+                const coordinates = feature.geometry.coordinates;
+                const type = feature.geometry.type;
+
+                let allPaths = [];
+                let allPoints = [];
+
+                if (type === 'Polygon') {
+                    coordinates.forEach(ring => {
+                        const path = ring.map(coord => convertCoord(coord));
+                        allPaths.push(path);
+                        allPoints = allPoints.concat(ring);
+                    });
+                } else if (type === 'MultiPolygon') {
+                    coordinates.forEach(polygon => {
+                        polygon.forEach(ring => {
+                            const path = ring.map(coord => convertCoord(coord));
+                            allPaths.push(path);
+                            allPoints = allPoints.concat(ring);
+                        });
+                    });
+                }
+
+                // 计算边界框中心
+                const center = calculateVisualCenter(allPaths, shortName);
+
+                provinces.push({
+                    name: shortName,
+                    fullName: name,
+                    paths: allPaths,
+                    center: center,
+                    color: COLORS.normal
+                });
+            });
+        }
+
+        // 坐标转换
+        function convertCoord(coord) {
+            const [lng, lat] = coord;
+            const x = (lng - 73) * SCALE + OFFSET_X;
+            const y = (54 - lat) * SCALE + OFFSET_Y;
+            return [x, y];
+        }
+
+        // 计算视觉中心点（使用最大多边形的质心）
+        function calculateVisualCenter(paths, provinceName) {
+            if (!paths || paths.length === 0) return [0, 0];
+
+            // 找到面积最大的多边形
+            let maxArea = 0;
+            let maxPath = paths[0];
+
+            paths.forEach(path => {
+                const area = Math.abs(polygonArea(path));
+                if (area > maxArea) {
+                    maxArea = area;
+                    maxPath = path;
+                }
+            });
+
+            // 计算质心
+            let cx = 0, cy = 0;
+            const n = maxPath.length;
+            for (let i = 0; i < n; i++) {
+                cx += maxPath[i][0];
+                cy += maxPath[i][1];
+            }
+            cx /= n;
+            cy /= n;
+
+            // 应用手动调整
+            const adj = centerAdjustments[provinceName] || { x: 0, y: 0 };
+            cx += adj.x;
+            cy += adj.y;
+
+            return [cx, cy];
+        }
+
+        // 计算多边形面积（用于判断主区域）
+        function polygonArea(path) {
+            let area = 0;
+            const n = path.length;
+            for (let i = 0; i < n; i++) {
+                const j = (i + 1) % n;
+                area += path[i][0] * path[j][1];
+                area -= path[j][0] * path[i][1];
+            }
+            return area / 2;
+        }
+
+        // 绘制地图
+        function drawMap() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            provinces.forEach(province => {
+                drawProvince(province);
+            });
+        }
+
+        // 绘制省份
+        function drawProvince(province) {
+            let fillColor = COLORS.normal;
+            if (province === selectedProvince) {
+                fillColor = COLORS.selected;
+            } else if (province === highlightedProvince) {
+                fillColor = COLORS.highlight;
+            } else if (province === hoveredProvince) {
+                fillColor = COLORS.hover;
+            }
+
+            ctx.fillStyle = fillColor;
+            ctx.strokeStyle = COLORS.stroke;
+            ctx.lineWidth = 1.5;
+
+            province.paths.forEach(path => {
+                drawPath(path);
+            });
+
+            // 绘制省份名称
+            if (province.center && province.name.length <= 3) {
+                ctx.fillStyle = COLORS.text;
+                ctx.font = province.name.length > 2 ? 'bold 14px Microsoft YaHei' : 'bold 16px Microsoft YaHei';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                // 添加文字阴影
+                ctx.shadowColor = 'rgba(0,0,0,0.8)';
+                ctx.shadowBlur = 3;
+                ctx.shadowOffsetX = 1;
+                ctx.shadowOffsetY = 1;
+
+                ctx.fillText(province.name, province.center[0], province.center[1]);
+
+                // 重置阴影
+                ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+            }
+        }
+
+        // 绘制路径
+        function drawPath(path) {
+            if (path.length < 2) return;
+            ctx.beginPath();
+            ctx.moveTo(path[0][0], path[0][1]);
+            for (let i = 1; i < path.length; i++) {
+                ctx.lineTo(path[i][0], path[i][1]);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+        }
+
+        // 判断点是否在多边形内
+        function isPointInPolygon(point, polygon) {
+            let inside = false;
+            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                const xi = polygon[i][0], yi = polygon[i][1];
+                const xj = polygon[j][0], yj = polygon[j][1];
+                if (((yi > point[1]) !== (yj > point[1])) &&
+                    (point[0] < (xj - xi) * (point[1] - yi) / (yj - yi) + xi)) {
+                    inside = !inside;
+                }
+            }
+            return inside;
+        }
+
+        // 获取鼠标位置的省份
+        function getProvinceAtPoint(x, y) {
+            for (let i = provinces.length - 1; i >= 0; i--) {
+                const province = provinces[i];
+                for (const path of province.paths) {
+                    if (isPointInPolygon([x, y], path)) {
+                        return province;
+                    }
+                }
+            }
+            return null;
+        }
+
+        // 鼠标移动事件
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+            const province = getProvinceAtPoint(x, y);
+
+            if (province !== hoveredProvince) {
+                hoveredProvince = province;
+                drawMap();
+            }
+
+            if (province) {
+                tooltip.textContent = province.name;
+                tooltip.style.left = (e.clientX - rect.left + 10) + 'px';
+                tooltip.style.top = (e.clientY - rect.top - 30) + 'px';
+                tooltip.style.opacity = '1';
+            } else {
+                tooltip.style.opacity = '0';
+            }
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            hoveredProvince = null;
+            tooltip.style.opacity = '0';
+            drawMap();
+        });
+
+        // 点击事件
+        canvas.addEventListener('click', (e) => {
+            if (isSpinning) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+            const province = getProvinceAtPoint(x, y);
+            if (province) {
+                selectProvince(province);
+            }
+        });
+
+        // 选中省份
+        function selectProvince(province) {
+            selectedProvince = province;
+            resultEl.textContent = province.name;
+            showToast(`已选择：${province.name}`);
+
+            history.unshift(province.name);
+            uniqueProvinces.add(province.name);
+            countMap[province.name] = (countMap[province.name] || 0) + 1;
+
+            updateStats();
+            updateHistory();
+            drawMap();
+        }
+
+        // 显示提示
+        function showToast(msg) {
+            toastEl.textContent = msg;
+            toastEl.classList.add('show');
+            setTimeout(() => toastEl.classList.remove('show'), 2000);
+        }
+
+        // 更新统计
+        function updateStats() {
+            document.getElementById('total-count').textContent = history.length;
+            document.getElementById('unique-count').textContent = uniqueProvinces.size;
+            document.getElementById('remain-count').textContent = 34 - uniqueProvinces.size;
+
+            let maxCount = 0;
+            let maxProvince = '';
+            for (const [name, count] of Object.entries(countMap)) {
+                if (count > maxCount) {
+                    maxCount = count;
+                    maxProvince = name;
+                }
+            }
+            document.getElementById('most-count').textContent = maxCount > 0 ? `${maxProvince}(${maxCount})` : '-';
+        }
+
+        // 更新历史
+        function updateHistory() {
+            historyEl.innerHTML = history.map((p, i) => {
+                const style = i === 0 ? 'style="background: rgba(233, 69, 96, 0.6); font-weight: bold;"' : '';
+                return `<span class="history-item" ${style}>${p}</span>`;
+            }).join('');
+        }
+
+        // 随机抽奖
+        function spin() {
+            if (isSpinning || provinces.length === 0) return;
+
+            isSpinning = true;
+            btn.disabled = true;
+            btn.textContent = '🎰 抽奖中...';
+
+            const totalFlashes = 20 + Math.floor(Math.random() * 10);
+            const finalIndex = Math.floor(Math.random() * provinces.length);
+            const finalProvince = provinces[finalIndex];
+
+            let flashCount = 0;
+            let delay = 50;
+
+            function flash() {
+                highlightedProvince = provinces[flashCount % provinces.length];
+                drawMap();
+
+                flashCount++;
+                if (flashCount < totalFlashes) {
+                    if (flashCount > totalFlashes - 8) {
+                        delay += 30;
+                    }
+                    setTimeout(flash, delay);
+                } else {
+                    highlightedProvince = null;
+                    selectedProvince = finalProvince;
+                    resultEl.textContent = finalProvince.name;
+                    showToast(`🎉 恭喜选中：${finalProvince.name}`);
+
+                    history.unshift(finalProvince.name);
+                    uniqueProvinces.add(finalProvince.name);
+                    countMap[finalProvince.name] = (countMap[finalProvince.name] || 0) + 1;
+
+                    updateStats();
+                    updateHistory();
+                    drawMap();
+
+                    isSpinning = false;
+                    btn.disabled = false;
+                    btn.textContent = '🎲 再抽一次';
+                }
+            }
+
+            flash();
+        }
+
+        btn.addEventListener('click', spin);
+
+        // 键盘快捷键
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'Enter') {
+                e.preventDefault();
+                if (!isSpinning) spin();
+            }
+        });
+
+        // 初始化
+        loadGeoData();
+    </script>
+</body>
+</html>
