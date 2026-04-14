@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>省份转盘抽奖</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Microsoft YaHei', sans-serif;
+            padding: 20px;
+        }
+        h1 {
+            color: #e94560;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            font-size: 2.5em;
+        }
+        .container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .wheel-container {
+            position: relative;
+            width: 500px;
+            height: 500px;
+        }
+        #wheel {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(233, 69, 96, 0.5),
+                        inset 0 0 20px rgba(0,0,0,0.3);
+            transition: transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99);
+        }
+        .wheel-segment {
+            position: absolute;
+            width: 50%;
+            height: 50%;
+            left: 50%;
+            top: 0;
+            transform-origin: 0% 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            clip-path: polygon(0 100%, 100% 100%, 50% 0);
+        }
+        .wheel-segment span {
+            position: absolute;
+            font-size: 12px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            white-space: nowrap;
+            transform: rotate(90deg) translateY(-60px);
+            transform-origin: center;
+        }
+        #pointer {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 40px solid #e94560;
+            z-index: 10;
+            filter: drop-shadow(0 3px 5px rgba(0,0,0,0.5));
+        }
+        #center-btn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #e94560, #c73e54);
+            border: 5px solid #fff;
+            color: #fff;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 20;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.4);
+            transition: all 0.3s;
+        }
+        #center-btn:hover {
+            transform: translate(-50%, -50%) scale(1.1);
+            box-shadow: 0 8px 30px rgba(233, 69, 96, 0.6);
+        }
+        #center-btn:active {
+            transform: translate(-50%, -50%) scale(0.95);
+        }
+        #center-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: translate(-50%, -50%);
+        }
+        .result {
+            margin-top: 30px;
+            padding: 20px 40px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            border: 2px solid #e94560;
+            text-align: center;
+        }
+        .result h2 {
+            color: #fff;
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+        .result .province {
+            color: #e94560;
+            font-size: 2.5em;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(233, 69, 96, 0.5);
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .history {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            max-width: 500px;
+        }
+        .history h3 {
+            color: #aaa;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        .history-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+        }
+        .history-item {
+            background: rgba(233, 69, 96, 0.3);
+            color: #fff;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎡 省份转盘</h1>
+
+    <div class="container">
+        <div class="wheel-container">
+            <div id="pointer"></div>
+            <canvas id="wheel" width="500" height="500"></canvas>
+            <button id="center-btn">开始</button>
+        </div>
+
+        <div class="result">
+            <h2>选中省份</h2>
+            <div class="province" id="result">点击转盘开始</div>
+        </div>
+
+        <div class="history">
+            <h3>历史记录</h3>
+            <div class="history-list" id="history"></div>
+        </div>
+    </div>
+
+    <script>
+        const provinces = [
+            '北京', '天津', '上海', '重庆',
+            '河北', '山西', '辽宁', '吉林', '黑龙江',
+            '江苏', '浙江', '安徽', '福建', '江西', '山东',
+            '河南', '湖北', '湖南', '广东', '海南',
+            '四川', '贵州', '云南', '陕西', '甘肃', '青海',
+            '台湾', '内蒙古', '广西', '西藏', '宁夏', '新疆',
+            '香港', '澳门'
+        ];
+
+        const colors = [
+            '#e94560', '#ff6b6b', '#feca57', '#48dbfb',
+            '#1dd1a1', '#5f27cd', '#ff9ff3', '#54a0ff',
+            '#00d2d3', '#ff6b35', '#7bed9f', '#70a1ff',
+            '#eccc68', '#ff7f50', '#a29bfe', '#fd79a8',
+            '#00cec9', '#e17055', '#6c5ce7', '#fdcb6e',
+            '#00b894', '#e84393', '#0984e3', '#6c5ce7',
+            '#fab1a0', '#81ecec', '#74b9ff', '#a29bfe',
+            '#dfe6e9', '#b2bec3', '#636e72', '#2d3436',
+            '#e94560', '#ff6b6b'
+        ];
+
+        const canvas = document.getElementById('wheel');
+        const ctx = canvas.getContext('2d');
+        const btn = document.getElementById('center-btn');
+        const resultEl = document.getElementById('result');
+        const historyEl = document.getElementById('history');
+
+        let currentRotation = 0;
+        let isSpinning = false;
+        let history = [];
+
+        function drawWheel() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = Math.min(centerX, centerY) - 5;
+            const segmentAngle = (2 * Math.PI) / provinces.length;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            provinces.forEach((province, i) => {
+                const startAngle = i * segmentAngle - Math.PI / 2;
+                const endAngle = startAngle + segmentAngle;
+
+                // 绘制扇形
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+                ctx.closePath();
+                ctx.fillStyle = colors[i % colors.length];
+                ctx.fill();
+
+                // 绘制边框
+                ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // 绘制文字
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate(startAngle + segmentAngle / 2);
+                ctx.textAlign = 'right';
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 12px Microsoft YaHei';
+                ctx.shadowColor = 'rgba(0,0,0,0.5)';
+                ctx.shadowBlur = 3;
+                ctx.fillText(province, radius - 20, 4);
+                ctx.restore();
+            });
+
+            // 绘制中心圆
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 50, 0, 2 * Math.PI);
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fill();
+            ctx.strokeStyle = '#e94560';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        }
+
+        function spin() {
+            if (isSpinning) return;
+
+            isSpinning = true;
+            btn.disabled = true;
+            btn.textContent = '转动中...';
+
+            // 随机选择结果
+            const selectedIndex = Math.floor(Math.random() * provinces.length);
+            const segmentAngle = 360 / provinces.length;
+
+            // 计算目标角度（使选中的扇形对准指针）
+            const targetAngle = 360 - (selectedIndex * segmentAngle) - segmentAngle / 2;
+            const spins = 5 + Math.floor(Math.random() * 3); // 5-7圈
+            const totalRotation = spins * 360 + targetAngle;
+
+            currentRotation += totalRotation;
+            canvas.style.transform = `rotate(${currentRotation}deg)`;
+
+            // 等待动画完成
+            setTimeout(() => {
+                const selected = provinces[selectedIndex];
+                resultEl.textContent = selected;
+                resultEl.style.animation = 'none';
+                resultEl.offsetHeight; // 触发重绘
+                resultEl.style.animation = 'bounce 0.5s ease';
+
+                // 添加到历史记录
+                history.unshift(selected);
+                if (history.length > 10) history.pop();
+                updateHistory();
+
+                isSpinning = false;
+                btn.disabled = false;
+                btn.textContent = '再转一次';
+            }, 4000);
+        }
+
+        function updateHistory() {
+            historyEl.innerHTML = history.map(p =>
+                `<span class="history-item">${p}</span>`
+            ).join('');
+        }
+
+        // 初始化
+        drawWheel();
+        btn.addEventListener('click', spin);
+
+        // 添加弹跳动画
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes bounce {
+                0%, 100% { transform: scale(1); }
+                50% { transform: scale(1.2); }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>
